@@ -1,1 +1,1 @@
-from .slres import process_one
+from .slres import process_one as process_one

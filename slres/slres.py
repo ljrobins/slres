@@ -1,18 +1,12 @@
 #!/usr/bin/python3
-#
 # orbitNP.py
-#
 # Author: Matthew Wilkinson.
 # Institute: Space Geodesy Facility, Herstmonceux UK.
 # Research Council: British Geological Survey, Natural Environment Research Council.
-#
 # Version: 1.2.1
 # Last Modified: 28th April 2022
-#
 # Visit here to read our disclaimer: http://www.bgs.ac.uk/downloads/softdisc.html and please refer to the LICENSE.txt document included in this distribution.
-
 # Please refer to the README file included in this distribution.
-#
 
 import datetime as dt
 import os
@@ -26,9 +20,11 @@ import polars as pl
 src_dir = os.path.dirname(os.path.abspath(inspect.getsourcefile(lambda: 0)))
 
 
-def refmm(pres: float, temp: float, hum: float, alt: float, rlam: float, phi: float, hm: float) -> float:
+def refmm(
+    pres: float, temp: float, hum: float, alt: float, rlam: float, phi: float, hm: float
+) -> float:
     # Calculate and return refraction delay range corrections from Marini-Murray model using the pressure,
-    # temperature, humidity, satellite elevation, station latitude, station height and laser wavelength
+    # temperature, humidity, satellite elevation, station latitude, station height and laser wavelengthength
 
     flam = 0.9650 + 0.0164 / (rlam * rlam) + 0.228e-3 / (rlam**4)
     fphih = 1.0 - 0.26e-2 * np.cos(2.0 * phi) - 0.3 * hm
@@ -75,9 +71,7 @@ def dchols(a: np.ndarray, m: int):
         if sum <= 0.0:
             ierr = 3
             return ierr, a
-
         b[i, i] = np.sqrt(sum)
-
         if i != m - 1:
             for j in range(i + 1, m):
                 sum = a[j, i]
@@ -85,7 +79,6 @@ def dchols(a: np.ndarray, m: int):
                     for k in range(i):
                         sum = sum - b[k, i] * b[k, j]
                 b[i, j] = sum / b[i, i]
-
     for i in range(m):
         for j in range(m):
             x[j] = 0.0
@@ -96,7 +89,6 @@ def dchols(a: np.ndarray, m: int):
                 for k in range(j):
                     sum = sum - b[k, j] * x[k]
             x[j] = sum / b[j, j]
-
         for j in range(m):
             m1 = m - 1 - j
             sum = x[m1]
@@ -137,146 +129,158 @@ def cal2mjd(yr, mm, dd):
     return mjdref
 
 
-def snx_coords(mjd: float) -> pl.DataFrame:
+def snx_coords(mjd: float = 0.0) -> pl.DataFrame:
     a = mjd2cal(mjd)
     b = dt.datetime(a[0], a[1], a[2])
     year = b.timetuple().tm_yday
-    PVid = open(os.path.join(src_dir, "SLR_PV.snx"), "r")
     PVsite = False
     PVxyz = False
     data = {}
 
-    for line in PVid:
-        if "-SITE/ID" in line:
-            PVsite = False
-        if PVsite:
-            code = line[1:5]
-            if code not in data:
-                data[code] = {}
-                data[code]["STAT_id"] = code
+    with open(os.path.join(src_dir, "SLR_PV.snx"), "r") as PVid:
+        for line in PVid:
+            if "-SITE/ID" in line:
+                PVsite = False
+            if PVsite:
+                code = line[1:5]
+                if code not in data:
+                    data[code] = {}
+                    data[code]["station_id"] = code
 
-            data[code]["lon"] = (
-                float(line[44:47])
-                + float(line[48:50]) / 60.0
-                + float(line[51:55]) / 3600.0
-            )
-            data[code]["lat"] = (
-                float(line[56:59])
-                + float(line[59:62]) / 60.0
-                + float(line[63:67]) / 3600.0
-            )
-            data[code]["hei"] = float(line[68:75])
-            data[code]["STAT_name"] = line[21:32].strip()
-        if "+SITE/ID" in line:
-            PVsite = True
-            PVid.readline()
+                data[code]["lon"] = (
+                    float(line[44:47])
+                    + float(line[48:50]) / 60.0
+                    + float(line[51:55]) / 3600.0
+                )
+                data[code]["lat"] = (
+                    float(line[56:59])
+                    + float(line[59:62]) / 60.0
+                    + float(line[63:67]) / 3600.0
+                )
+                data[code]["hei"] = float(line[68:75])
+                data[code]["STAT_name"] = line[21:32].strip()
+            if "+SITE/ID" in line:
+                PVsite = True
+                PVid.readline()
 
-        if "-SOLUTION/ESTIMATE" in line:
-            PVxyz = False
-            break
-        if PVxyz:
-            code = line[14:18]
-            refE = line[27:39].split(":")
-            tnow = dt.datetime.now()
-            year = int(refE[0])
-            if tnow.year - 2000 < year:
-                year = year + 1900
-            else:
-                year = year + 2000
-            PVdt = (
-                dt.datetime(year, 1, 1)
-                + dt.timedelta(days=int(refE[1]) - 1)
-                + dt.timedelta(seconds=int(refE[2]))
-            )
-            STAT_X = float(line[47:68])
-            line = PVid.readline()
-            STAT_Y = float(line[47:68])
-            line = PVid.readline()
-            STAT_Z = float(line[47:68])
-            line = PVid.readline()
-            VEL_X = float(line[47:68])
-            line = PVid.readline()
-            VEL_Y = float(line[47:68])
-            line = PVid.readline()
-            VEL_Z = float(line[47:68])
+            if "-SOLUTION/ESTIMATE" in line:
+                PVxyz = False
+                break
+            if PVxyz:
+                code = line[14:18]
+                refE = line[27:39].split(":")
+                tnow = dt.datetime.now()
+                year = int(refE[0])
+                if tnow.year - 2000 < year:
+                    year = year + 1900
+                else:
+                    year = year + 2000
+                PVdt = (
+                    dt.datetime(year, 1, 1)
+                    + dt.timedelta(days=int(refE[1]) - 1)
+                    + dt.timedelta(seconds=int(refE[2]))
+                )
+                STAT_X = float(line[47:68])
+                STAT_Y = float(PVid.readline()[47:68])
+                STAT_Z = float(PVid.readline()[47:68])
+                VEL_X = float(PVid.readline()[47:68])
+                VEL_Y = float(PVid.readline()[47:68])
+                VEL_Z = float(PVid.readline()[47:68])
 
-            a = mjd2cal(mjd)
-            tdt = dt.datetime(a[0], a[1], a[2]) + dt.timedelta(
-                seconds=86400.0 * (mjd % 1)
-            )
+                tdt = dt.datetime(*mjd2cal(mjd)) + dt.timedelta(
+                    seconds=spd * (mjd % 1)
+                )
 
-            delt = (tdt - PVdt).total_seconds() / (365.25 * 86400.0)
+                delt = (tdt - PVdt).total_seconds() / (365.25 * spd)
 
-            STAT_X = STAT_X + delt * VEL_X
-            STAT_Y = STAT_Y + delt * VEL_Y
-            STAT_Z = STAT_Z + delt * VEL_Z
+                data[code]["STAT_X"] = (STAT_X + delt * VEL_X) * 1e-6
+                data[code]["STAT_Y"] = (STAT_Y + delt * VEL_Y) * 1e-6
+                data[code]["STAT_Z"] = (STAT_Z + delt * VEL_Z) * 1e-6
 
-            data[code]["STAT_X"] = STAT_X * 1e-6
-            data[code]["STAT_Y"] = STAT_Y * 1e-6
-            data[code]["STAT_Z"] = STAT_Z * 1e-6
-
-        if "+SOLUTION/ESTIMATE" in line:
-            PVxyz = True
-            PVid.readline()
-    PVid.close()
-
+            if "+SOLUTION/ESTIMATE" in line:
+                PVxyz = True
+                PVid.readline()
     return pl.DataFrame(list(data.values()))
 
 # CONSTANTS
 sol = 299792458.0  # Speed of Light m/s
 dae = 6.378137000  # PARAMETERS OF SPHEROID
-df = 298.2570
-
+df = 298.2570 # inverse flattening ratio of the ellipsoid
+spd = 86400.0 # Seconds per day (TT)
 nu = 13  # lsq size
 swi = 1.5e-8  # weighting applied to residual fitting
-FRdata = ""  # ILRS full-rate date file in CRD format
-CPFin = ""  # ILRS XYZ orbit prediction in CPF format
-STAT_id = ""  # Station ID
-STAT_coords = ""  # Station coordinates string
-SNXref = True  # Flag to acquire station coordinates fron SINEX file
-METap = False  # Flag to show met data applied
-Wavel = 532.0  # Laser pulse width
-r50 = ""  # 50 record string
-q50 = "0"  # Data quality assessment indicator
-RRout = False  # Output range residuals to file
-Unfilter = False  # Flag to include the data in the CRD full-rate data that is flagged as 'noise'
-ipass = -1  # select pass in FRD file
-runWarningList = []  # run warnings output in summary
-Dchannel = 0  # Detector Channel
 
+def process_one(
+    frd_file: str,
+    cpf_file: str,
+    station_id: int,
+    pass_number: int,
+    wavelength: float = 532.0,
+    out_dir: str = '.'
+) -> pl.DataFrame:
+    assert os.path.exists(frd_file)
+    assert os.path.exists(cpf_file)
 
-def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
-    Unfilter = True
-    FRDloop = False
-    RRout = True
+    station_id = str(station_id)
 
-    loop = True  # loop in a FRD file
+    save_path = os.path.join(out_dir, f'{os.path.split(frd_file)[1].split(".")[0]}_{station_id}_{pass_number}.dat')
 
-    print("\t+ FRD file is", FRdata)
+    df_station = snx_coords()
 
-    df_station = snx_coords(0.0)
+    df_station_id = df_station.filter(pl.col("station_id") == station_id)
+    assert df_station_id.height == 1
+    STAT_name = df_station_id["STAT_name"][0]
+    STAT_LAT = df_station_id["lat"][0]
 
-    df_stat_id = df_station.filter(pl.col("STAT_id") == STAT_id)
-    assert df_stat_id.height == 1
-    STAT_name = df_stat_id["STAT_name"][0]
-    STAT_LAT = df_stat_id["lat"][0]
+    print(f"\t+ Station is {station_id} {STAT_name}")
 
-    print(f"\t+ Station is {STAT_id} {STAT_name}")
+    print("\n -- Read FRD file for epochs, ranges and meteorological data... ")
 
-    if len(CPFin):
-        print("\t+ CPF Pred is", CPFin)
+    with open(frd_file, "r") as fid:
+        h2i = []
+        h2l = []
+        h4l = []
+        c10 = 0
+        Fcount = []
+        for i, line in enumerate(fid):
+            if "h2" in line or "H2" in line:
+                if c10 > 0:
+                    Fcount.append(c10)
+                c10 = 0
+                h2i.append(i)
+                h2l.append(line.split()[2])
+            if "h4" in line or "H4" in line:
+                h4l.append(line.strip())
+            if line[0:2] == "10":
+                c10 = c10 + 1
+        Fcount.append(c10)
+        lnpass = 1
+        h2i = np.array(h2i)
+        h2l = np.array(h2l)
+        numpass = np.sum(h2l == station_id)
+        selpass = np.where(h2l == station_id)[0]
+        if numpass == 0:
+            raise RuntimeError(f"No data for station {station_id} in FRD file")
 
-    if Unfilter:
-        print("\t+ Include unfiltered range measurements")
-
-    if RRout:
-        print("\t+ Output range residuals to file resids.dat")
-
-    read1st = True
-    while loop:  # If a multi-pass full-rate file is used, this loop will allow a quick selection of next pass.
-        if not FRDloop:
-            loop = False
-
+        h4l = np.array(h4l)
+        print(
+            "\t",
+            "Index",
+            "\t",
+            "Station Name     Num Records         H4 Start/End Entry",
+        )
+        for i, s in enumerate(selpass):
+            print(
+                f"\t  {i} \t  {STAT_name:11}   {Fcount[s]:8d}           {h4l[s]}"
+            )
+        print(
+            "\n FRD file contains",
+            numpass,
+            "passes for station",
+            station_id,
+            "\t\t\t(q to quit)",
+        )
+        
         ep1 = -1.0  # Previous epoch
         ep1m = -1.0  # Previous epoch in met data
         mjd_daychange = False  # Change of day detectd in data records
@@ -292,79 +296,11 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
         Crng = []  # Calibration system delay
         STsel = False  # Station found in full-rate data file
         SDapplied = True  # Indictor that system delay is applied
-        runWarningList = []  # List of warnings accumulated during run
-        Dchannel = -1  # Detector channel
 
         # If the data file provided is a full-rate data file in CRD format read in the data header H4, calibrations,
         # the met data entries and the Epoch-Range data.
 
-        print("\n -- Read FRD file for epochs, ranges and meteorological data... ")
-        try:
-            fid = open(FRdata)
-        except IOError as e:
-            print(f"\t Failed to open full-rate data file. {e.strerror} : {FRdata}")
-            sys.exit()
-
-        if read1st:  # Read through full-rate data for multiple SLR passes
-            h2i = []
-            h2l = []
-            h4l = []
-            c10 = 0
-            Fcount = []
-            for i, line in enumerate(fid):
-                if "h2" in line or "H2" in line:
-                    if c10 > 0:
-                        Fcount.append(c10)
-                    c10 = 0
-                    h2i.append(i)
-                    h2l.append(line.split()[2])
-                if "h4" in line or "H4" in line:
-                    h4l.append(line.strip())
-                if line[0:2] == "10":
-                    c10 = c10 + 1
-            Fcount.append(c10)
-            read1st = False
-
-        lnpass = 1
-        h2i = np.array(h2i)
-        h2l = np.array(h2l)
-        numpass = np.sum(h2l == STAT_id)
-        selpass = np.where(h2l == STAT_id)[0]
-        if numpass == 0:
-            print(" EXIT: No data for station", STAT_id, "in FRD file")
-            sys.exit()
-        elif numpass == 1:
-            print("\n FRD file contains only one pass for station", STAT_id)
-            lnpass = h2i[selpass[0]]
-            loop = False
-            pass
-        else:
-            ipass = -1
-            h4l = np.array(h4l)
-            print(
-                "\t",
-                "Index",
-                "\t",
-                "Station Name     Num Records         H4 Start/End Entry",
-            )
-            for i, s in enumerate(selpass):
-                print(f"\t  {i} \t  {STAT_name:11}   {Fcount[s]:8d}           {h4l[s]}")
-            print(
-                "\n FRD file contains",
-                numpass,
-                "passes for station",
-                STAT_id,
-                "\t\t\t(q to quit)",
-            )
-            while (ipass < 0) | (ipass >= numpass):
-                try:
-                    rawi = input("Enter pass number: ")
-                    ipass = int(rawi)
-                except Exception:
-                    if rawi == "q":
-                        sys.exit()
-                    ipass = -1
-            lnpass = h2i[selpass[ipass]]
+        lnpass = h2i[selpass[pass_number]]
 
         fid.seek(0)
         line = fid.readline()
@@ -373,25 +309,15 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
             sys.exit()
 
         fid.seek(0)
-        h1l = ""
         for i, line in enumerate(fid):
             a = line.split()
 
-            if (a[0] == "H1") | (a[0] == "h1"):
-                CRDversion = a[2]
-                h1l = line
-
             if (a[0] == "H2") | (a[0] == "h2"):
-                if ((STAT_id == a[1]) | (STAT_id == a[2])) & (i == lnpass):
+                if ((station_id == a[1]) | (station_id == a[2])) & (i == lnpass):
                     STsel = True
 
             if STsel:
-                if (a[0] == "H3") | (a[0] == "h3"):
-                    Hsat = a[1]
-                elif (a[0] == "H4") | (a[0] == "h4"):
-                    Hyr = a[2]
-                    Hmon = "{:02d}".format(int(a[3]))
-                    Hd = "{:02d}".format(int(a[4]))
+                if (a[0] == "H4") | (a[0] == "h4"):
                     mjd1 = (
                         cal2mjd(int(a[2]), int(a[3]), int(a[4]))
                         + (float(a[5]) + float(a[6]) / 60.0 + float(a[7]) / 3600.0)
@@ -399,12 +325,15 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                     )
                     mjd2 = (
                         cal2mjd(int(a[8]), int(a[9]), int(a[10]))
-                        + (float(a[11]) + float(a[12]) / 60.0 + float(a[13]) / 3600.0)
+                        + (
+                            float(a[11])
+                            + float(a[12]) / 60.0
+                            + float(a[13]) / 3600.0
+                        )
                         / 24.0
                     )
                     INmjd = cal2mjd(int(a[2]), int(a[3]), int(a[4]))
                     mjdm = INmjd
-                    mjdc = INmjd
                     c = mjd2cal(INmjd)
 
                     if a[18] == "0":
@@ -412,22 +341,20 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                         print(
                             "\n -- System Delay Calibration not applied.  Will be applied"
                         )
-                        runWarningList.append(
-                            "System Delay Calibration was not applied to ranges"
-                        )
                     else:
                         print("\n -- System Delay Calibration already applied")
 
                 elif (a[0] == "C0") | (a[0] == "c0"):  # read from C1 entry
                     CsysID = a[3]
+                    print(f'System config id: {CsysID}')
                 elif a[0] == "10":
-                    if (Unfilter) | (
+                    if (
                         a[5] != "1"
                     ):  # Take all records or filter out the noise flags
-                        ep = np.double(a[1]) / 86400.0
+                        ep = np.double(a[1]) / spd
                         if ep1 == -1.0:
                             ep1 = ep
-                        if ((ep + 300.0 / 86400.0 < mjd1 - INmjd) | (ep < ep1)) & (
+                        if ((ep + 300.0 / spd < mjd1 - INmjd) | (ep < ep1)) & (
                             not mjd_daychange
                         ):  # detect day change
                             print("\n -- Day change detected during pass")
@@ -439,18 +366,17 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                         cep = np.double(a[1])
 
                         c = mjd2cal(INmjd)
-                        datT = dt.datetime(c[0], c[1], c[2]) + dt.timedelta(seconds=cep)
+                        datT = dt.datetime(c[0], c[1], c[2]) + dt.timedelta(
+                            seconds=cep
+                        )
 
                         Ddatet.append(datT)
-                        if Dchannel == -1:
-                            Dchannel = int(a[6])
 
                 elif a[0] == "20":
-                    epm = np.double(a[1]) / 86400.0
+                    epm = np.double(a[1]) / spd
                     # Check if first met entry if from previous day
                     if (ep1m == -1.0) & (epm - np.mod(mjd1, 1) > 0.5):
                         print("\n -- Met dataset begins on previous day")
-                        runWarningList.append("Met dataset begins on previous day")
                         mjdm = mjdm - 1.0
 
                     # Detect day change in met entries
@@ -463,22 +389,19 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                     TK.append(np.double(a[3]))
                     humid.append(np.double(a[4]))
                 elif a[0] == "40":
-                    epc = np.double(a[1]) / 86400.0
+                    epc = np.double(a[1]) / spd
                     Cmep.append(INmjd + epc)
                     Crng.append(np.double(a[7]))
                 elif (a[0] == "H8") | (a[0] == "h8"):
                     break
 
-        fid.close()
-
         Depc = np.array(Depc)
         Drng = np.array(Drng)
         Ddatet = np.array(Ddatet)
         Dmep = np.array(Dmep)
-        mean_Dmep = np.mean(Dmep)  # mean data Depc
 
         if mjd2 < mjd1:  # Correct H4 record
-            mjd2 = mjd1 + (cep.argmax() - cep.argmin()) / 86400.0
+            mjd2 = mjd1 + (cep.argmax() - cep.argmin()) / spd
 
         if not SDapplied:
             if np.size(Cmep) > 1:
@@ -497,10 +420,7 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
             print(" No Epoch-Range data loaded, quitting...", STsel)
             sys.exit()
 
-        if Dchannel == -1:
-            Dchannel = 0
-
-        df_stat_mjd = snx_coords(mjd1).filter(pl.col("STAT_id") == STAT_id)
+        df_stat_mjd = snx_coords(mjd1).filter(pl.col("station_id") == station_id)
         STAT_name = df_stat_mjd["STAT_name"][0]
         STAT_LAT = df_stat_mjd["lat"][0]
         STAT_LONG = df_stat_mjd["lon"][0]
@@ -509,7 +429,7 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
         STAT_Y = df_stat_mjd["STAT_Y"][0]
         STAT_Z = df_stat_mjd["STAT_Z"][0]
 
-        print("\n\t+ SLR Station is", STAT_id, STAT_name)
+        print("\n\t+ SLR Station is", station_id, STAT_name)
 
         print(
             f"\t+ Station Latitude, Longitude and Height: {STAT_LAT:.2f} {STAT_LONG:.2f} {STAT_HEI:.1f}"
@@ -523,9 +443,7 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
         # Set up linear interpolation Python function for the met data entries
         print("\n -- Interpolate meteorological records ... ")
 
-        if np.size(Mmep) == 0:
-            METap = False
-        elif np.size(Mmep) > 1:
+        if np.size(Mmep) > 1:
             IntpP = interpolate.interp1d(
                 Mmep,
                 pressure,
@@ -548,25 +466,16 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
             PRESSURE = IntpP(Dmep)
             TEMP = IntpT(Dmep)
             HUM = IntpH(Dmep)
-
-            # Test if met data epochs are suitable
-            iMax = abs(np.max(Dmep) - (Mmep)).argsort()[0]
-            iMin = abs(np.min(Dmep) - (Mmep)).argsort()[0]
-            if (abs(np.max(Dmep) - Mmep[iMax]) < 0.5 / 24.0) & (
-                abs(np.min(Dmep) - Mmep[iMin]) < 1.5 / 24.0
-            ):
-                METap = True
         else:
             PRESSURE = pressure[0]
             TEMP = TK[0]
             HUM = humid[0]
-            METap = True
 
         # Read CPF Prediction File in the Depc, X, Y, Z lists and produce interpolation functions
-        if len(CPFin):
-            assert os.path.exists(CPFin)
-            print("\n -- Read CPF prediction file:", CPFin)
-            with open(CPFin, 'r') as cpf_fid:
+        if len(cpf_file):
+            assert os.path.exists(cpf_file)
+            print("\n -- Read CPF prediction file:", cpf_file)
+            with open(cpf_file, "r") as cpf_fid:
                 cpfEP = []
                 cpfX = []
                 cpfY = []
@@ -577,7 +486,7 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                 for line in cpf_fid:
                     a = line.split()
                     if a[0] == "10":
-                        mep = np.double(a[2]) + np.double(a[3]) / 86400.0
+                        mep = np.double(a[2]) + np.double(a[3]) / spd
                         if (stp == 0.0) & (mep2 != 0.0):
                             stp = mep - mep2
                         mep2 = mep
@@ -589,10 +498,13 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                             cpfY.append(np.double(a[6]))
                             cpfZ.append(np.double(a[7]))
 
-            cpf0 = cpfEP[0]
+            try:
+                cpf0 = cpfEP[0]
+            except IndexError:
+                raise RuntimeError(f'Probably using an out-of-range CPF file for pass {pass_number}')
             if np.size(cpfEP) == 0:
                 print(
-                    f"\n -- Selected CPF file {CPFin}does not cover the required orbit time period. Quit"
+                    f"\n -- Selected CPF file {cpf_file}does not cover the required orbit time period. Quit"
                 )
                 sys.exit()
 
@@ -612,13 +524,6 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                 cpf_ply_X = np.polyfit(cpfEP - cpf0, cpfX, kd)
                 cpf_ply_Y = np.polyfit(cpfEP - cpf0, cpfY, kd)
                 cpf_ply_Z = np.polyfit(cpfEP - cpf0, cpfZ, kd)
-
-        mX = np.polyval(cpf_ply_X, mean_Dmep - cpf0)
-        mY = np.polyval(cpf_ply_Y, mean_Dmep - cpf0)
-        mZ = np.polyval(cpf_ply_Z, mean_Dmep - cpf0)
-        geoR = np.sqrt(mX**2 + mY**2 + mZ**2)
-
-        # ******
 
         print("\n -- Begin orbit adjustment to fit range data")
         neps = len(Depc)
@@ -656,14 +561,11 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
         alndd = 0.0
         rdldd = 0.0
         saln = 0.0
-        sacr = 0.0
         srdl = 0.0
 
         salnd = 0.0
-        sacrd = 0.0
         srdld = 0.0
         salndd = 0.0
-        sacrdd = 0.0
         srdldd = 0.0
 
         ierr = 0
@@ -678,33 +580,30 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
         ql = []
         qm = []
         qn = []
-
         ddr = []
-
         dxi = []
         dyi = []
         dzi = []
-
         dvx = []
         dvy = []
         dvz = []
-
-        t = []
-        p = []
-        h = []
 
         rX = np.polyval(cpf_ply_X, Dmep - cpf0)
         rY = np.polyval(cpf_ply_Y, Dmep - cpf0)
         rZ = np.polyval(cpf_ply_Z, Dmep - cpf0)
         cpfR = np.sqrt(
-            (rX - STAT_X * 1e6) ** 2 + (rY - STAT_Y * 1e6) ** 2 + (rZ - STAT_Z * 1e6) ** 2
+            (rX - STAT_X * 1e6) ** 2
+            + (rY - STAT_Y * 1e6) ** 2
+            + (rZ - STAT_Z * 1e6) ** 2
         )  # Range from SLR Station to satellite in metres
 
         if np.size(Crng) > 0:
-            cpfR = cpfR + 0.5 * np.mean(Crng) * 1e-12 * sol  # Include half of system delay
-        dkt = Dmep + (cpfR / sol) / 86400.0  # Time of laser light arrival at satellite
-        dkt1 = dkt - 0.5 / 86400.0  # Epoch - 0.5 seconds
-        dkt2 = dkt + 0.5 / 86400.0  # Epoch + 0.5 seconds
+            cpfR = (
+                cpfR + 0.5 * np.mean(Crng) * 1e-12 * sol
+            )  # Include half of system delay
+        dkt = Dmep + (cpfR / sol) / spd  # Time of laser light arrival at satellite
+        dkt1 = dkt - 0.5 / spd  # Epoch - 0.5 seconds
+        dkt2 = dkt + 0.5 / spd  # Epoch + 0.5 seconds
 
         cX = (
             np.polyval(cpf_ply_X, dkt - cpf0) * 1e-6
@@ -719,20 +618,22 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
         vX = (
             (np.polyval(cpf_ply_X, dkt2 - cpf0) - np.polyval(cpf_ply_X, dkt1 - cpf0))
             * 1e-6
-            * 86400.0
+            * spd
         )  # X velocity component in megametres/day
         vY = (
             (np.polyval(cpf_ply_Y, dkt2 - cpf0) - np.polyval(cpf_ply_Y, dkt1 - cpf0))
             * 1e-6
-            * 86400.0
+            * spd
         )  # Y velocity component in megametres/day
         vZ = (
             (np.polyval(cpf_ply_Z, dkt2 - cpf0) - np.polyval(cpf_ply_Z, dkt1 - cpf0))
             * 1e-6
-            * 86400.0
+            * spd
         )  # Z velocity component in megametres/day
 
-        ddr = np.sqrt(cX**2 + cY**2 + cZ**2)  # Radial distance to satellite from geo-centre
+        ddr = np.sqrt(
+            cX**2 + cY**2 + cZ**2
+        )  # Radial distance to satellite from geo-centre
         dvel = np.sqrt(vX**2 + vY**2 + vZ**2)  # Velocity magnitude
         rv = ddr * dvel
 
@@ -783,7 +684,7 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
             tp = (Depc - dtobc) / 60.0  # Time measured from mid-time of pass
             if Depc[-1] < Depc[0]:
                 sel = np.where(Depc > Depc[-1])
-                tp[sel] = (Depc[sel] - 86400.0) / 60.0
+                tp[sel] = (Depc[sel] - spd) / 60.0
 
             # Evaluate constant terms + time rates of change
             # argument minutes of time, measured from mid-time of pass
@@ -821,7 +722,9 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
             czd = (dxt * gvs[0] + dyt * gvs[1] + dzt * gvs[2]) / (
                 dr * dstn
             )  # Zenith height component of SAT->STAT vector / vector range
-            altc = np.arcsin(czd) * 360.0 / (2.0 * np.pi)  # inverse sin() to give elevation
+            altc = (
+                np.arcsin(czd) * 360.0 / (2.0 * np.pi)
+            )  # inverse sin() to give elevation
 
             if itr < itrm:
                 #  Compute partial derivatives. First, range wrt along-track, across-track and radial errors in the predicted ephemeris.
@@ -856,7 +759,13 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
             # Compute refraction delay and apply to predicted 2-way range , using the Marini and Murray model.
             if nmet > 0:
                 refr = refmm(
-                    PRESSURE, TEMP, HUM, altc, Wavel * 1e-3, STAT_LATrad, STAT_HEI_Mm
+                    PRESSURE,
+                    TEMP,
+                    HUM,
+                    altc,
+                    wavelength * 1e-3,
+                    STAT_LATrad,
+                    STAT_HEI_Mm,
                 )
                 delr = refr * 1.0e-6
                 drc = drc + delr
@@ -883,8 +792,6 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                 print(
                     "\n\t  #      pts         rms2          rms3          rmsa        TBias      Radial"
                 )
-                pltresx1 = Depc  # Plot residuals
-                pltresy1 = tresid
 
             rej3 = 3.0 * rms3
             rej2 = 2.0 * rms3
@@ -893,8 +800,6 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                 dresid[Ssel] * dresid[Ssel], dtype="longdouble"
             )  # Sum of residual squares
             nr = np.size(Ssel)  # number of residuals
-
-            pltres = tresid * 1.0e3
 
             # Form normal eqns.
             for j in range(nu):
@@ -966,7 +871,6 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                     saln = s[0] * 8.64e7
 
                     acr = rf[1]  # across track corrections
-                    sacr = s[1] * 1.0e6
 
                     rdl = rf[2]  # radial correction
                     srdl = s[2] * 1.0e6
@@ -977,14 +881,12 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
                     acrd = rf[4]
                     rdld = rf[5]
                     salnd = s[3] * 8.64e7
-                    sacrd = s[4] * 1.0e6
                     srdld = s[5] * 1.0e6
 
                     alndd = rf[6]
                     acrdd = rf[7]
                     rdldd = rf[8]
                     salndd = s[6] * 8.64e7
-                    sacrdd = s[7] * 1.0e6
                     srdldd = s[8] * 1.0e6
 
                     # Accumulate corrections during iteration
@@ -1011,11 +913,15 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
         print(
             f"\n\tSatellite orbital time bias (ms)    {alnc * 8.64e7:10.4f} \t{saln:8.4f}"
         )
-        print(f"\tSatellite radial error (m)          {radc * 1.0e6:10.4f} \t{srdl:8.4f}")
+        print(
+            f"\tSatellite radial error (m)          {radc * 1.0e6:10.4f} \t{srdl:8.4f}"
+        )
         print(
             f"\tRate of time bias (ms/minute)       {alndc * 8.64e7:10.4f} \t{salnd:8.4f}"
         )
-        print(f"\tRate of radial error (m/minute)     {raddc * 1.0e6:10.4f} \t{srdld:8.4f}")
+        print(
+            f"\tRate of radial error (m/minute)     {raddc * 1.0e6:10.4f} \t{srdld:8.4f}"
+        )
         print(
             f"\tAcceleration of time bias           {alnddc * 8.64e7:10.4f} \t{salndd:8.4f}"
         )
@@ -1024,46 +930,34 @@ def process_one(FRdata: str, CPFin: str, STAT_id: str, Wavel: float = 532.0):
         )
 
         if abs(alnc * 8.64e7) > 100.0:
-            runWarningList.append(
-                "Large Time Bias required " + "{:9.3f}".format(alnc * 8.64e7) + " ms"
-            )
             print(
-                "\n -- Large Time Bias required " + "{:9.3f}".format(alnc * 8.64e7) + " ms"
+                "\n -- Large Time Bias required "
+                + "{:9.3f}".format(alnc * 8.64e7)
+                + " ms"
             )
         elif abs(alnc * 8.64e7) > 10.0:
-            runWarningList.append(
-                "Time Bias required " + "{:9.3f}".format(alnc * 8.64e7) + " ms"
-            )
             print("\n -- Time Bias required " + "{:9.3f}".format(alnc * 8.64e7) + " ms")
 
         if abs(radc * 1.0e6) > 100.0:
-            runWarningList.append(
-                "Large Radial Offset required " + "{:9.3f}".format(radc * 1.0e6) + " m"
-            )
             print(
                 "\n -- Large Radial Offset required "
                 + "{:9.3f}".format(radc * 1.0e6)
                 + " m"
             )
         elif abs(radc * 1.0e6) > 10.0:
-            print("\n -- Radial Offset required " + "{:9.3f}".format(radc * 1.0e6) + " m")
+            print(
+                "\n -- Radial Offset required " + "{:9.3f}".format(radc * 1.0e6) + " m"
+            )
 
-        presid = tresid * 1e3
-        aRMS = np.std(presid)
-        aresid = abs(presid)
 
-        print(f"\n\tFlattened range residuals RMS {aRMS:.2f} ps")
-
-        if RRout:
-            # write range residuals to a file
-            filerr = open(os.path.join(src_dir, "resids.dat"), "w")
+        # write range residuals to a file
+        with open(save_path, "w") as filerr:
             for i, ep in enumerate(Depc):
                 filerr.write(
                     "{:18.12f}".format(ep)
                     + " "
                     + "{:14.12f}".format(1e-12 * Drng[i])
                     + " "
-                    + "{:18.12f}".format(presid[i] * 1e-3)
+                    + "{:18.12f}".format(tresid[i])
                     + "\n"
                 )
-            filerr.close()
