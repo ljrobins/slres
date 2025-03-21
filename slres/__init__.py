@@ -1,0 +1,1 @@
+from .slres import process_one
