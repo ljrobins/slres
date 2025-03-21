@@ -1,0 +1,7 @@
+requests
+beautifulsoup4
+polars
+matplotlib
+scipy
+PyQt5
+PySide2

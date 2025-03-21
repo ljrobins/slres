@@ -1,0 +1,257 @@
+orbitNP.py
+
+  --  README  --
+  
+Author: Matthew Wilkinson
+Institute: Space Geodesy Facility, Herstmonceux UK.
+Research Centre: British Geological Survey
+Research Council: Natural Environment Research Council
+
+Version: 1.2.1
+Last Modified: 28th April 2022
+
+Please visit here to read the disclaimer: https://www2.bgs.ac.uk/downloads/softdisc.html and please refer to the LICENSE.txt document included in this distribution.
+ 
+ 
+### 
+# Introduction
+###
+
+orbitNP.py is written in Python3 to process Satellite Laser Ranging (SLR) observations. It originates from FORTRAN code developed at the Space Geodesy Facility, Herstmonceux, UK.
+
+A single observation is comprised of an accurate time-stamped epoch in Coordinated Universal Time (UTC) and a highly precise time interval representing the 2-way time-of-flight to a satellite by a pulse of laser light. As a satellite passes over a SLR station, many laser range observations are recorded. These 2-way range measurements can be converted to flattened observed-computed (O-C) range residuals by solving for along track and radial corrections to a reference orbit prediction. The flattened residuals are then averaged in bins and time stamped to form precise range observations called normal points (https://ilrs.cddis.eosdis.nasa.gov/data_and_products/data/npt/npt_algorithm.html).
+
+The epochs and ranges can be supplied in the form of pre-processed SLR returns in ILRS full-rate CRD data files (https://ilrs.cddis.eosdis.nasa.gov/data_and_products/formats/crd.html), which can be quickly examined for a particular station and satellite.  
+
+Alternatively, raw epoch-range data can be processed. Corrections, such as those required for optical filters, must be applied. Similarly, any epoch corrections must be applied to refer the recorded epoch to the SLR reference point. The data should contain satellite track with only a small range window of surrounding noise. System delay calibration and local meteorological data must also be provided.
+
+orbitNP.py uses an ILRS CPF prediction file (https://ilrs.cddis.eosdis.nasa.gov/data_and_products/formats/cpf.html) that covers the observation time period to produce range residuals. Radial offset and time bias corrections to the orbit are solved for through an iterative least squares process to flatten the range residuals.
+
+Meteorological data (Temperature, Pressure and Humidity) recorded at the SLR station is required to correct for delays through the atmosphere, using the Marini-Murray model.  This is taken from the full-rate CRD file or must be provided separately.
+
+The latitude, longitude and altitude of the SLR station are required.  These are now taken from a separate file in SINEX format using the link SLR_PV.snx. The station XYZ coordinates and velocities are also taken from this file. The required file can be found through CDDIS (EARTHDATA login required) https://cddis.nasa.gov/archive/slr/slrocc/.
+
+Normal points statistics such as the RMS, skew and kurtosis are calculated using the python3 numpy routines. The peak is the iterated mean from a 1*sigma rejection as described in Sinclair AT (1993) SLR data screening; location of peak of data distribution. In: Degnan JJ (ed) Proceedings of 8 Int. Workshop on Laser Ranging Instrumentation, Annapolis, MD, USA, pp 2–34, 43, 18–22 May 1993. https://ntrs.nasa.gov/api/citations/19940011087/downloads/19940011087.pdf. An alternative peak determination method of fitting a tangent to a smoothed distribution is available.
+
+The program can output files that contain:
+    --   Normal points in CRD format
+    --   Range residuals with epochs
+    --   Orbit correction parameters from the solution
+
+
+    
+    
+### 
+# Installation
+###
+
+The orbitNP.py code can be run using a Python3 installation, including the following dependencies:
+    --  numpy
+    --  scipy (version > 0.17.0 for “extrapolate” option on interpolate.interp1d)
+    --  matplotlib
+    --  tk or qt5 matplotlib backend
+    
+
+    
+###
+# Running orbitNP.py
+###
+
+orbitNP.py runs on the command line and accepts the following inputs
+
+        Options:
+        
+          -h
+          See these options listed.
+        
+          -f <FRD file>
+          Full-rate file. This is SLR observation data in the ILRS CRD format. It contains epochs and ranges, along with the associated meteorological data.  This could be a single satellite pass from one station or a combined file containing many passes from different stations. For a combined file, the user selects a station using the '-s' code and then selects which pass from a list. The '-L' will provide a list of available stations. Using the -o option will loop back once processing in complete to select another pass.
+          
+          -c <CPF file>
+          CPF prediction file. The CPF file must contain a valid prediction that covers the period of the satellite epoch-range observations times.
+          
+          -A
+          Auto-fetch CPF. Automatically fetches CPF predictions from the EDC Data Centre using the full-rate CRD filename or information provided on the -t and -j options.  This requires an internet connection.
+          
+          -p <provider>
+          CPF prediction provider (3 character string). Set the CPF provider (e.g.: sgf, jax, hts, dgf) to use when using the automatic CPF fetch -A option. If this is not selected an option list is provided.
+          
+          -d <datafile>
+          Raw epoch-range data file. A raw data file containing two columns [Epoch] [Range] in seconds. 
+          
+          -m <Met File>
+          Local meteorological datafile recorded at the SLR station.
+          FORMAT: [mjd] [seconds of Day] [pressure (hPa)] [temperature (K)] [humidity (%)] e.g.: 57395 11638.080 998.32 276.20  87.6
+                                             
+          -b <Cal File>
+          The system delay calibration to be applied to the observation data, determined from terrestrial ranges to a known target distance.  A linear interpolation between the supplied ranges will be applied. 
+          FORMAT:  [mjd] [seconds of Day] [two-way system delay (ps)] e.g. 58420  42448.320   104312.8
+            or
+          FORMAT:  [mjd] [seconds of Day] [two-way system delay (ps)] [number of ranges] [RMS] [skew] [kurtosis] [peak-Mean] [surveyed range (m)]  e.g. 58420  42448.320   104312.8  24.0   0.1  -0.3   0.5
+                    
+          -j <Modified Julian Day>
+          The Modified Julian Day of the first epoch in the raw data file.
+                    
+          -C <Centre of Mass 1-way in mm>
+          Inlcuding a centre of mass offset in the calculated ranges can result in better orbital solutions and flatter range residuals. This correction is not applied to the range data.
+          
+          -s <Station Code>
+          Station 4-digit code. This is used to pick up the station coordinates stored in the program.
+	     
+	      -L                 
+	      List all station codes and names with SLR data in the full-rate data file then select which to proceed with. If no full-rate file is provided list all stations from the SNX file.  
+          
+          -I <System ID>
+          System Configurations are given identifying ID for CRD output
+          
+          -t <Target Name>      
+          The satellite target name as used by the EDC Data Cetre to enable automatic CPF downloading.
+          
+          -l <"Lat Lon Alt">
+          Station coordinates. The station coordinates can be input directly as a string containing station latitude(deg), longitude(deg) and altitude(m).
+          
+          -H <Hz>
+          The laser repetition rate. Used to calculate the return rate entry in the normal points.
+          
+          -w <ps>
+          The laser pulse width in picoseconds. Used for a better Gaussian fit to the distribution.
+          
+          -W <nm>
+          The laser wavelength in nanometres. For use in atmospheric delay calculation. Default 532 nm.
+          
+          -N <seconds>
+          Normal point length in seconds, Default 30 seconds.
+          
+          -M <number>
+          Minimum number of range observations to form a Normal point. Default 30.
+                    
+          -e
+          Include unfiltered range measurements. The CRD format includes a flag on the full-rate data observation line '11' to indicate whether data is 'signal' or 'noise' or 'unknown'.  Only signal flagged data is used by default.
+
+          -V
+          Set Automatic CPF search to look for CPF version 1 predictions. Default is version 2.
+          
+          -q
+          Quick pass iteration. Make 1st least squares iteration a quick pass with evenly distributed data. This is useful to process passes with uneven periods of low and high levels of observations.
+          
+          -g <factor>
+          Apply <factor>*<gauss sigma> clipping to flattened residuals from the Gauss fit peak before forming normal points [2.0 - 6.0 permitted].
+          
+          -G <factor>
+          Apply <factor>*<gauss sigma> clipping for wider clipping to be included in the full-rate data file.
+          
+          -k <factor>
+          Apply <factor>*<sigma> clipping from the mean to flattened residuals before forming normal points [2.0 - 6.0 permitted].
+          
+          -K <factor>
+          Apply <factor>*<sigma> clipping for wider clipping to be included in the full-rate data file.
+          
+          -u <lower:upper>
+          Apply fixed clipping from the LEHM of the distribution at <lower> and <upper> limits in ps.  The LEHM is identified by fitting a Gaussian profile to front of the distribution only.
+          
+          -U <lower:upper>
+           Apply fixed clipping from the LEHM for wider clipping to be included in the full-rate data file.
+          
+          -P
+          Determine peak for normal point peak-mean value from a tangent to a smoothed distribution. The default method is the iterated mean from a 1*sigma rejection.
+          
+          -o
+          Loop back to the pass selection in a multi-pass FRD file once previous results are generated.
+             
+          -n
+          Output normal points to to file normalp.dat.
+          
+          -F
+          Output final epoch and ranges to file fullr.dat in full-rate CRD format.
+          
+          -S
+          Recompute Statistics Record '50' and replace in CRD format outputs.
+          
+          -r
+          Output range residuals to file resids.dat.
+          
+          -v
+          Output obit solve parameters to file solvep.out.
+          
+          -y
+          Output full-rate CRD headings and normal points to fullnormalp.dat.  
+                    
+          -x
+          Plot final results and save as .png. No display.
+          
+          -X
+          Show plot of final results and save as .png.
+          
+          -z <plot filename>
+          Set filename for .png save file for final plot. Enter without .png extension.
+          
+          -Q
+          Output PDF file for full plot quality
+
+
+          
+          
+###          
+# Tips 
+###
+
+ -- Options -k, -g and -u cannot be used together as they enable different methods for residual clipping.  
+ 
+ -- If no -p option is given but -A is included then a list of available CPF providers is printed. Sometimes selecting a different provider can improve the flattening of the residuals.
+ 
+     
+          
+          
+###          
+# Examples
+###
+
+1.  python3 orbitNP.py -f lageos1_201606.frd -A -s 7237 -N 120 -o -r
+    
+    This example takes an ILRS FRD file containing many passes from many SLR stations for the LAGEOS-1 satellite and produces a list of passes for the specified station 7237. It automatically fetches the appropriate CPF file and the residuals are outputted to the file 'resids.dat'. On completion it loops back to select another pass.
+
+
+
+2.  python3 orbitNP.py -d epochrange.dat -c ajisai_cpf_181010_7831.jax -m met.dat -u -100:500 -U -150:600 -X -s 7840 -N 30 -n -j 58401 -t Ajisai
+
+    This example processes raw epoch-range data contained in the file 'epochrange.dat'. It uses uses a specified CPF prediction file and local met data contained in 'met.dat'. The target is given as the spherical geodetic satellite Ajisai and the modified julian day is given as 58401. It clips the final one-way range residuals at 100 and +500 picoseconds from the LEHM and includes non-selected data at wider clipping levels -150 and +600. Finally normal points are generated and printed to the file 'normalp.dat'. A plot will be generated, saved and displayed.
+         
+         
+         
+       
+       
+       
+    
+###
+# Update History
+###
+
+Version 1.1
+    --    Added import of warnings Python3 module
+    --    New method for cal2mjd() and mjd2cal()
+    --    Include option for full CRD normal point output file.
+    --    Include 1st iteration quick-pass option to prevent high density segments dominating pass fit.
+    --    Include input of 'System Configuration ID'.
+    --    Adjusted method for gauss fit to front of residual distribution.
+    --    Allow for disagreement in first epoch and H4 record.
+    --    Station coordinates and velocities taken from an ILRS SINEX solution file
+    --    Peak-Mean calculated using a tangent fit to a smoothed profile.
+    --    Option to include unfiltered range measurements
+
+    
+Version 1.2
+    --    Gauss fit filter added.
+    --    Peak-Mean default as 1*sigma iterative mean.
+    --    Option to calculate a '50' record if not included in full-rate CRD file.
+    --    Include option to output final ranges in CRD format with met and calibration values.
+    --    Filtering at two levels. The first is to form the normal points and the second is to include in the full-rate output
+    --    Include option to input satellite centre of mass offset to improve the orbit solution and flatten range residuals.
+    --    Indicate if individual normal point residual bins have slopes.
+    --    Select SLR station data in full-rate data file from list.
+    --    Matplotlib figure window now kept open to allow for much faster plotting of a series of passes.
+    
+    
+    
+Version 1.2.1
+    --    CPF interpolation replaced with high order polynomial fit. This is to provide better prediciton values and to remove some actifacts in range residuals.
+    --    Update matplotlib subplot axis referencing method to work with the latest versions.
