@@ -267,7 +267,7 @@ def process_one(
             raise RuntimeError(f"No data for station {station_id} in FRD file")
 
         h4l = np.array(h4l)
-        
+
         if verbose:
             print(
                 "\t",
@@ -310,7 +310,6 @@ def process_one(
         line = fid.readline()
         if (line.split()[0] != "H1") & (line.split()[0] != "h1"):
             raise RuntimeError(" ERROR: FRD input file read error")
-            sys.exit()
 
         fid.seek(0)
         for i, line in enumerate(fid):
@@ -419,7 +418,6 @@ def process_one(
 
         if np.size(Dmep) == 0:
             raise RuntimeError(" No Epoch-Range data loaded, quitting...", STsel)
-            sys.exit()
 
         df_stat_mjd = snx_coords(mjd1).filter(pl.col("station_id") == station_id)
         STAT_name = df_stat_mjd["STAT_name"][0]
@@ -508,11 +506,9 @@ def process_one(
                     f"Probably using an out-of-range CPF file for pass {pass_number}"
                 )
             if np.size(cpfEP) == 0:
-                if verbose:
-                    print(
-                        f"\n -- Selected CPF file {cpf_file}does not cover the required orbit time period. Quit"
-                    )
-                sys.exit()
+                raise RuntimeError(
+                    f"\n -- Selected CPF file {cpf_file} does not cover the required orbit time period. Quit"
+                )
 
             kd = 16
             if np.size(cpfEP) <= kd:
@@ -842,9 +838,7 @@ def process_one(
                 # Carry out least squares solution
                 ierr, rd = dchols(rd, nu)  #  invert normal matrix
                 if ierr != 0:
-                    if verbose:
-                        print("FAILED to invert normal matrix - quit", ierr)
-                    sys.exit()
+                    raise RuntimeError("FAILED to invert normal matrix - quit")
 
                 for i in range(nu):
                     rf[i] = 0.0
@@ -947,7 +941,11 @@ def process_one(
                     + " ms"
                 )
             elif abs(alnc * 8.64e7) > 10.0:
-                print("\n -- Time Bias required " + "{:9.3f}".format(alnc * 8.64e7) + " ms")
+                print(
+                    "\n -- Time Bias required "
+                    + "{:9.3f}".format(alnc * 8.64e7)
+                    + " ms"
+                )
 
             if abs(radc * 1.0e6) > 100.0:
                 print(
@@ -957,7 +955,9 @@ def process_one(
                 )
             elif abs(radc * 1.0e6) > 10.0:
                 print(
-                    "\n -- Radial Offset required " + "{:9.3f}".format(radc * 1.0e6) + " m"
+                    "\n -- Radial Offset required "
+                    + "{:9.3f}".format(radc * 1.0e6)
+                    + " m"
                 )
 
         # write range residuals to a file
@@ -971,3 +971,12 @@ def process_one(
                     + "{:18.12f}".format(tresid[i])
                     + "\n"
                 )
+
+        df = pl.DataFrame(
+            [
+                pl.Series(name="seconds_of_day", values=Depc),
+                pl.Series(name="range", values=Drng * 1e-12),
+                pl.Series(name="residual", values=tresid),
+            ]
+        )
+        return df

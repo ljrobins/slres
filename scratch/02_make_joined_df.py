@@ -10,7 +10,7 @@ df_pass = (
             "transmit_wave",
             "pass_start_date",
             "pass_uid",
-            "pass_start_line",
+            "pass_number_in_file",
             "target_name",
         ]
     )
@@ -20,8 +20,9 @@ df_pass = (
             pl.col("pass_start_date").cast(pl.Datetime)
             + pl.duration(seconds=pl.col("pass_start_seconds"))
         ).alias("pass_start_datetime"),
-    ).with_columns(
-       (pl.col('pass_start_datetime') + pl.duration(hours=1)).alias('pass_end_bound')
+    )
+    .with_columns(
+        (pl.col("pass_start_datetime") + pl.duration(hours=1)).alias("pass_end_bound")
     )
     .collect(engine="streaming")
 ).sort("pass_start_datetime")
@@ -53,11 +54,16 @@ for tn in matching_tns:
     print("CPF:", dc)
     df = df_pass.filter(pl.col("target_name") == tn)
     print("FRD:", df)
-    dj = df.lazy().join_where(
-        dc.lazy(),
-        pl.col("datetime_start") < pl.col("pass_start_datetime"),
-        pl.col("datetime_end") >= pl.col("pass_end_bound"),
-    ).unique('pass_uid').collect()
+    dj = (
+        df.lazy()
+        .join_where(
+            dc.lazy(),
+            pl.col("datetime_start") < pl.col("pass_start_datetime"),
+            pl.col("datetime_end") >= pl.col("pass_end_bound"),
+        )
+        .unique("pass_uid")
+        .collect()
+    )
     print("joined:", dj)
     djs.append(dj)
 djs = pl.concat(djs).sort("file_path")

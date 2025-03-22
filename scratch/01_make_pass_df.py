@@ -26,11 +26,19 @@ def process_one(fpath: str) -> pl.DataFrame:
     data = []
     with open(fpath, "r") as f:
         lines = list(f)
-        df_line_and_id = pl.DataFrame([{'line_num': i, 'station_id': int(l.split()[2])} for i,l in enumerate(lines) if l.lower().startswith('h2')]).sort('station_id', 'line_num').with_columns(
-            (pl.cum_count("station_id").over("station_id").alias("pass_index") - 1)
+        df_line_and_id = (
+            pl.DataFrame(
+                [
+                    {"line_num": i, "station_id": int(l.split()[2])}
+                    for i, l in enumerate(lines)
+                    if l.lower().startswith("h2")
+                ]
+            )
+            .sort("station_id", "line_num")
+            .with_columns(
+                (pl.cum_count("station_id").over("station_id").alias("pass_index") - 1)
+            )
         )
-        print(df_line_and_id)
-        endd
 
         for i, line in enumerate(lines):
             line = line.lower()
@@ -47,7 +55,10 @@ def process_one(fpath: str) -> pl.DataFrame:
                 station_header["station_name"] = ls[1]
                 station_header["station_id"] = int(ls[2])
                 station_header["station_time_scale"] = int(ls[5])
-                station_header['pass_number_in_file'] = df_line_and_id.filter(pl.col('station_id') == station_header["station_id"], pl.col('line_num') == i)
+                station_header["pass_number_in_file"] = df_line_and_id.filter(
+                    pl.col("station_id") == station_header["station_id"],
+                    pl.col("line_num") == i,
+                )["pass_index"][0]
             if line.startswith("h3"):  # sec 1.3, pg. 5, Target Header
                 target_header = {}
                 target_header["target_name"] = fpath.split("/")[-1].split("_")[0]
