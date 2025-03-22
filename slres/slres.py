@@ -326,8 +326,11 @@ def process_one(
                         + (float(a[5]) + float(a[6]) / 60.0 + float(a[7]) / 3600.0)
                         / 24.0
                     )
+                    yr2 = int(a[8])
+                    if yr2 == -1:
+                        raise RuntimeError('Year is -1')
                     mjd2 = (
-                        cal2mjd(int(a[8]), int(a[9]), int(a[10]))
+                        cal2mjd(yr2, int(a[9]), int(a[10]))
                         + (float(a[11]) + float(a[12]) / 60.0 + float(a[13]) / 3600.0)
                         / 24.0
                     )

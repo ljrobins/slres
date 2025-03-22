@@ -4,6 +4,7 @@ from pprint import pprint
 from alive_progress import alive_bar
 import os
 
+
 skip_existing = True
 out_file = 'proc/residuals.parquet'
 
@@ -15,9 +16,39 @@ df_lens = (
     df.group_by("file_path", "station_id")
     .agg(pl.len().alias("total_passes"))
     .sort("file_path", "station_id")
-)
+).reverse()
 
 total_passes = df_lens['total_passes'].sum()
+
+def process_dd(dd: dict) -> pl.DataFrame:
+    output_path = os.path.join(
+        out_file,
+        f"target_name={dd['target_name']}",
+        f"year={dd['year']}",
+        f"file_name={dd['file_name']}",
+        f"station_id={dd['station_id']}",
+        f"pass_number_in_file={dd['pass_number_in_file']}",
+        f"00000000.parquet",
+    )
+    if os.path.exists(output_path) and skip_existing:
+        print(f"Skipping {dd['file_name']}...")
+        bar(skipped=True)
+        return None
+
+    _df = slres.process_one(
+        dd["file_path"],
+        dd["file_path_right"],
+        dd["station_id"],
+        dd["pass_number_in_file"],
+        wavelength=dd["transmit_wave"],
+        out_dir="out",
+        verbose=False,
+    )
+    _df = _df.with_columns(
+        *[pl.Series(name=k, values=_df.height * [v]) for k,v in dd.items() if k not in ['datetime_start', 'datetime_end', 'datetime_mid', 'pass_end_bound', 'obs']]
+    )
+    _df.write_parquet(out_file, partition_by=['target_name', 'year', 'file_name', 'station_id', 'pass_number_in_file'])
+    print(_df.height)
 
 with alive_bar(total_passes) as bar:
     for d in df_lens.iter_rows(named=True):
@@ -29,35 +60,7 @@ with alive_bar(total_passes) as bar:
 
         for dd in df_this.iter_rows(named=True):
             try:
-                print(dd)
-
-                output_path = os.path.join(
-                    out_file,
-                    f"target_name={dd['target_name']}",
-                    f"year={dd['year']}",
-                    f"file_name={dd['file_name']}",
-                    f"pass_number_in_file={dd['pass_number_in_file']}",
-                    f"00000000.parquet",
-                )
-                if os.path.exists(output_path) and skip_existing:
-                    print(f"Skipping {dd['file_name']}...")
-                    bar(skipped=True)
-                    continue
-
-                _df = slres.process_one(
-                    dd["file_path"],
-                    dd["file_path_right"],
-                    dd["station_id"],
-                    dd["pass_number_in_file"],
-                    wavelength=dd["transmit_wave"],
-                    out_dir="out",
-                    verbose=True,
-                )
-                _df = _df.with_columns(
-                    *[pl.Series(name=k, values=_df.height * [v]) for k,v in dd.items() if k not in ['datetime_start', 'datetime_end', 'datetime_mid', 'pass_end_bound', 'obs']]
-                )
-                _df.write_parquet(out_file, partition_by=['target_name', 'year', 'file_name', 'pass_number_in_file'])
-                print(_df.height)
+                process_dd(dd)
                 bar()
-            except RuntimeError:
-                print("RuntimeError occurred")
+            except Exception as e:
+                print(f"Error occured: {e}, skipping")
