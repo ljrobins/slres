@@ -187,9 +187,7 @@ def snx_coords(mjd: float = 0.0) -> pl.DataFrame:
                 VEL_Y = float(PVid.readline()[47:68])
                 VEL_Z = float(PVid.readline()[47:68])
 
-                tdt = dt.datetime(*mjd2cal(mjd)) + dt.timedelta(
-                    seconds=spd * (mjd % 1)
-                )
+                tdt = dt.datetime(*mjd2cal(mjd)) + dt.timedelta(seconds=spd * (mjd % 1))
 
                 delt = (tdt - PVdt).total_seconds() / (365.25 * spd)
 
@@ -202,13 +200,15 @@ def snx_coords(mjd: float = 0.0) -> pl.DataFrame:
                 PVid.readline()
     return pl.DataFrame(list(data.values()))
 
+
 # CONSTANTS
 sol = 299792458.0  # Speed of Light m/s
 dae = 6.378137000  # PARAMETERS OF SPHEROID
-df = 298.2570 # inverse flattening ratio of the ellipsoid
-spd = 86400.0 # Seconds per day (TT)
+df = 298.2570  # inverse flattening ratio of the ellipsoid
+spd = 86400.0  # Seconds per day (TT)
 nu = 13  # lsq size
 swi = 1.5e-8  # weighting applied to residual fitting
+
 
 def process_one(
     frd_file: str,
@@ -216,14 +216,17 @@ def process_one(
     station_id: int,
     pass_number: int,
     wavelength: float = 532.0,
-    out_dir: str = '.'
+    out_dir: str = ".",
 ) -> pl.DataFrame:
     assert os.path.exists(frd_file)
     assert os.path.exists(cpf_file)
 
     station_id = str(station_id)
 
-    save_path = os.path.join(out_dir, f'{os.path.split(frd_file)[1].split(".")[0]}_{station_id}_{pass_number}.dat')
+    save_path = os.path.join(
+        out_dir,
+        f"{os.path.split(frd_file)[1].split('.')[0]}_{station_id}_{pass_number}.dat",
+    )
 
     df_station = snx_coords()
 
@@ -270,9 +273,7 @@ def process_one(
             "Station Name     Num Records         H4 Start/End Entry",
         )
         for i, s in enumerate(selpass):
-            print(
-                f"\t  {i} \t  {STAT_name:11}   {Fcount[s]:8d}           {h4l[s]}"
-            )
+            print(f"\t  {i} \t  {STAT_name:11}   {Fcount[s]:8d}           {h4l[s]}")
         print(
             "\n FRD file contains",
             numpass,
@@ -280,7 +281,7 @@ def process_one(
             station_id,
             "\t\t\t(q to quit)",
         )
-        
+
         ep1 = -1.0  # Previous epoch
         ep1m = -1.0  # Previous epoch in met data
         mjd_daychange = False  # Change of day detectd in data records
@@ -325,11 +326,7 @@ def process_one(
                     )
                     mjd2 = (
                         cal2mjd(int(a[8]), int(a[9]), int(a[10]))
-                        + (
-                            float(a[11])
-                            + float(a[12]) / 60.0
-                            + float(a[13]) / 3600.0
-                        )
+                        + (float(a[11]) + float(a[12]) / 60.0 + float(a[13]) / 3600.0)
                         / 24.0
                     )
                     INmjd = cal2mjd(int(a[2]), int(a[3]), int(a[4]))
@@ -346,11 +343,9 @@ def process_one(
 
                 elif (a[0] == "C0") | (a[0] == "c0"):  # read from C1 entry
                     CsysID = a[3]
-                    print(f'System config id: {CsysID}')
+                    print(f"System config id: {CsysID}")
                 elif a[0] == "10":
-                    if (
-                        a[5] != "1"
-                    ):  # Take all records or filter out the noise flags
+                    if a[5] != "1":  # Take all records or filter out the noise flags
                         ep = np.double(a[1]) / spd
                         if ep1 == -1.0:
                             ep1 = ep
@@ -366,9 +361,7 @@ def process_one(
                         cep = np.double(a[1])
 
                         c = mjd2cal(INmjd)
-                        datT = dt.datetime(c[0], c[1], c[2]) + dt.timedelta(
-                            seconds=cep
-                        )
+                        datT = dt.datetime(c[0], c[1], c[2]) + dt.timedelta(seconds=cep)
 
                         Ddatet.append(datT)
 
@@ -501,7 +494,9 @@ def process_one(
             try:
                 cpf0 = cpfEP[0]
             except IndexError:
-                raise RuntimeError(f'Probably using an out-of-range CPF file for pass {pass_number}')
+                raise RuntimeError(
+                    f"Probably using an out-of-range CPF file for pass {pass_number}"
+                )
             if np.size(cpfEP) == 0:
                 print(
                     f"\n -- Selected CPF file {cpf_file}does not cover the required orbit time period. Quit"
@@ -948,7 +943,6 @@ def process_one(
             print(
                 "\n -- Radial Offset required " + "{:9.3f}".format(radc * 1.0e6) + " m"
             )
-
 
         # write range residuals to a file
         with open(save_path, "w") as filerr:

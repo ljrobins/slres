@@ -71,7 +71,11 @@ def get_links(url):
         # Check if it's a directory (heuristic: ends with '/')
         if monthly_file_pattern.match(href):  # Only allow monthly .gz files
             file_links.append(full_url)
-        if href.startswith("/pub/slr/data/") and not "." in href and not 'quarantine' in href:
+        if (
+            href.startswith("/pub/slr/data/")
+            and not "." in href
+            and not "quarantine" in href
+        ):
             dir_links.append(full_url)
 
     return file_links, dir_links

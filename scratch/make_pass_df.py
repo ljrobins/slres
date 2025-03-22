@@ -3,6 +3,7 @@ import os
 from datetime import date
 from alive_progress import alive_bar
 import humanize
+import uuid
 
 
 def process_one(fpath: str) -> pl.DataFrame:
@@ -21,15 +22,15 @@ def process_one(fpath: str) -> pl.DataFrame:
                 if line.startswith("h2"):  # sec 1.2, pg. 4, Station Header
                     station_header = {}
                     station_header["station_name"] = ls[1]
+                    station_header["station_id"] = int(ls[2])
                     station_header["station_time_scale"] = int(ls[5])
                 if line.startswith("h3"):  # sec 1.3, pg. 5, Target Header
                     target_header = {}
                     target_header["target_name"] = ls[1]
                     # target_header["ilrs_sat_id"] = ls[
                     #     2
-                    # ]
-                    # Based on COSPAR ID, says the doc
-                    # target_header["sc_id_code"] = int(ls[3])
+                    # ] # Based on COSPAR ID, says the doc
+                    target_header["sc_id_code"] = int(ls[3])
                     target_header["norad_id"] = int(ls[4])
                     target_header["sc_epoch_time_scale"] = int(ls[5])
                     target_header["target_type"] = int(ls[6])
@@ -50,6 +51,7 @@ def process_one(fpath: str) -> pl.DataFrame:
                     pass_header["sc_delay_applied"] = bool(int(ls[19]))
                     pass_header["range_type"] = int(ls[20])
                     pass_header["data_quality"] = int(ls[21])
+                    pass_header["pass_uid"] = str(uuid.uuid4())
                 if line.startswith(
                     "c0"
                 ):  # sec 2.1, pg. 10, System Configuration Record
@@ -79,6 +81,7 @@ def process_one(fpath: str) -> pl.DataFrame:
                         and pass_header
                         and target_header
                         and file_info
+                        and station_header
                     ):
                         d.update(
                             **laser_config,
@@ -86,10 +89,15 @@ def process_one(fpath: str) -> pl.DataFrame:
                             **pass_header,
                             **target_header,
                             **file_info,
+                            **station_header,
                         )
                     else:
-                        print(f"Skipping some data due to missing headers...")
-                        print(laser_config)
+                        print(
+                            f"Skipping some data in {fpath} due to missing headers..."
+                        )
+                        print(
+                            f"{laser_config=}, {system_config=}, {pass_header=}, {target_header=}, {file_info=}, {station_header=}"
+                        )
                         endd
                         continue
                     for k, v in d.items():
@@ -125,9 +133,9 @@ def process_one(fpath: str) -> pl.DataFrame:
     return df
 
 
-in_dir = "/media/liam/Backup/data/slr/data/fr_crd/technosat/2020/"
-out_dir = "."
-out_file = os.path.join(out_dir, "slr_passes.parquet")
+# in_dir = "/media/liam/Backup/data/slr/data/fr_crd/technosat/2020/"
+in_dir = "data"
+out_file = os.path.join("proc", "slr_passes.parquet")
 skip_existing = False
 
 with open("slres/badfiles.txt", "r") as f:
@@ -135,7 +143,7 @@ with open("slres/badfiles.txt", "r") as f:
 
 for root, dirs, files in os.walk(in_dir, topdown=False):
     for file in files:
-        if not file.endswith('.frd'):
+        if not file.endswith(".frd"):
             continue
         ifile = os.path.join(root, file)
         output_path = os.path.join(out_file, f"file_name={file}", "00000000.parquet")
