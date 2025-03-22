@@ -5,3 +5,5 @@ matplotlib
 scipy
 PyQt5
 PySide2
+humanize
+alive_progress
