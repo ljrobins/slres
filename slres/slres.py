@@ -217,6 +217,7 @@ def process_one(
     pass_number: int,
     wavelength: float = 532.0,
     out_dir: str = ".",
+    verbose: bool = False,
 ) -> pl.DataFrame:
     assert os.path.exists(frd_file)
     assert os.path.exists(cpf_file)
@@ -235,9 +236,9 @@ def process_one(
     STAT_name = df_station_id["STAT_name"][0]
     STAT_LAT = df_station_id["lat"][0]
 
-    print(f"\t+ Station is {station_id} {STAT_name}")
-
-    print("\n -- Read FRD file for epochs, ranges and meteorological data... ")
+    if verbose:
+        print(f"\t+ Station is {station_id} {STAT_name}")
+        print("\n -- Read FRD file for epochs, ranges and meteorological data... ")
 
     with open(frd_file, "r") as fid:
         h2i = []
@@ -266,21 +267,23 @@ def process_one(
             raise RuntimeError(f"No data for station {station_id} in FRD file")
 
         h4l = np.array(h4l)
-        print(
-            "\t",
-            "Index",
-            "\t",
-            "Station Name     Num Records         H4 Start/End Entry",
-        )
-        for i, s in enumerate(selpass):
-            print(f"\t  {i} \t  {STAT_name:11}   {Fcount[s]:8d}           {h4l[s]}")
-        print(
-            "\n FRD file contains",
-            numpass,
-            "passes for station",
-            station_id,
-            "\t\t\t(q to quit)",
-        )
+        
+        if verbose:
+            print(
+                "\t",
+                "Index",
+                "\t",
+                "Station Name     Num Records         H4 Start/End Entry",
+            )
+            for i, s in enumerate(selpass):
+                print(f"\t  {i} \t  {STAT_name:11}   {Fcount[s]:8d}           {h4l[s]}")
+            print(
+                "\n FRD file contains",
+                numpass,
+                "passes for station",
+                station_id,
+                "\t\t\t(q to quit)",
+            )
 
         ep1 = -1.0  # Previous epoch
         ep1m = -1.0  # Previous epoch in met data
@@ -306,7 +309,7 @@ def process_one(
         fid.seek(0)
         line = fid.readline()
         if (line.split()[0] != "H1") & (line.split()[0] != "h1"):
-            print(" ERROR: FRD input file read error")
+            raise RuntimeError(" ERROR: FRD input file read error")
             sys.exit()
 
         fid.seek(0)
@@ -335,15 +338,18 @@ def process_one(
 
                     if a[18] == "0":
                         SDapplied = False
-                        print(
-                            "\n -- System Delay Calibration not applied.  Will be applied"
-                        )
+                        if verbose:
+                            print(
+                                "\n -- System Delay Calibration not applied.  Will be applied"
+                            )
                     else:
-                        print("\n -- System Delay Calibration already applied")
+                        if verbose:
+                            print("\n -- System Delay Calibration already applied")
 
                 elif (a[0] == "C0") | (a[0] == "c0"):  # read from C1 entry
                     CsysID = a[3]
-                    print(f"System config id: {CsysID}")
+                    if verbose:
+                        print(f"System config id: {CsysID}")
                 elif a[0] == "10":
                     if a[5] != "1":  # Take all records or filter out the noise flags
                         ep = np.double(a[1]) / spd
@@ -352,7 +358,8 @@ def process_one(
                         if ((ep + 300.0 / spd < mjd1 - INmjd) | (ep < ep1)) & (
                             not mjd_daychange
                         ):  # detect day change
-                            print("\n -- Day change detected during pass")
+                            if verbose:
+                                print("\n -- Day change detected during pass")
                             INmjd = INmjd + 1.0
                             mjd_daychange = True
                         Dmep.append(INmjd + ep)
@@ -369,7 +376,8 @@ def process_one(
                     epm = np.double(a[1]) / spd
                     # Check if first met entry if from previous day
                     if (ep1m == -1.0) & (epm - np.mod(mjd1, 1) > 0.5):
-                        print("\n -- Met dataset begins on previous day")
+                        if verbose:
+                            print("\n -- Met dataset begins on previous day")
                         mjdm = mjdm - 1.0
 
                     # Detect day change in met entries
@@ -410,7 +418,7 @@ def process_one(
                 Drng = Drng - Crng[0]
 
         if np.size(Dmep) == 0:
-            print(" No Epoch-Range data loaded, quitting...", STsel)
+            raise RuntimeError(" No Epoch-Range data loaded, quitting...", STsel)
             sys.exit()
 
         df_stat_mjd = snx_coords(mjd1).filter(pl.col("station_id") == station_id)
@@ -422,11 +430,12 @@ def process_one(
         STAT_Y = df_stat_mjd["STAT_Y"][0]
         STAT_Z = df_stat_mjd["STAT_Z"][0]
 
-        print("\n\t+ SLR Station is", station_id, STAT_name)
+        if verbose:
+            print("\n\t+ SLR Station is", station_id, STAT_name)
 
-        print(
-            f"\t+ Station Latitude, Longitude and Height: {STAT_LAT:.2f} {STAT_LONG:.2f} {STAT_HEI:.1f}"
-        )
+            print(
+                f"\t+ Station Latitude, Longitude and Height: {STAT_LAT:.2f} {STAT_LONG:.2f} {STAT_HEI:.1f}"
+            )
 
         # calculate Station lat, long coordinates in radians
         STAT_LONGrad = STAT_LONG * 2 * np.pi / 360.0
@@ -434,7 +443,8 @@ def process_one(
         STAT_HEI_Mm = STAT_HEI * 1e-6
 
         # Set up linear interpolation Python function for the met data entries
-        print("\n -- Interpolate meteorological records ... ")
+        if verbose:
+            print("\n -- Interpolate meteorological records ... ")
 
         if np.size(Mmep) > 1:
             IntpP = interpolate.interp1d(
@@ -465,31 +475,31 @@ def process_one(
             HUM = humid[0]
 
         # Read CPF Prediction File in the Depc, X, Y, Z lists and produce interpolation functions
-        if len(cpf_file):
-            assert os.path.exists(cpf_file)
+        assert os.path.exists(cpf_file)
+        if verbose:
             print("\n -- Read CPF prediction file:", cpf_file)
-            with open(cpf_file, "r") as cpf_fid:
-                cpfEP = []
-                cpfX = []
-                cpfY = []
-                cpfZ = []
+        with open(cpf_file, "r") as cpf_fid:
+            cpfEP = []
+            cpfX = []
+            cpfY = []
+            cpfZ = []
 
-                mep2 = 0.0
-                stp = 0.0
-                for line in cpf_fid:
-                    a = line.split()
-                    if a[0] == "10":
-                        mep = np.double(a[2]) + np.double(a[3]) / spd
-                        if (stp == 0.0) & (mep2 != 0.0):
-                            stp = mep - mep2
-                        mep2 = mep
-                        if (mep >= (mjd1 - 0.5 / 24.0) - 2.0 * stp) & (
-                            mep <= (mjd2 + 0.5 / 24.0) + 3.0 * stp
-                        ):
-                            cpfEP.append(mep)
-                            cpfX.append(np.double(a[5]))
-                            cpfY.append(np.double(a[6]))
-                            cpfZ.append(np.double(a[7]))
+            mep2 = 0.0
+            stp = 0.0
+            for line in cpf_fid:
+                a = line.split()
+                if a[0] == "10":
+                    mep = np.double(a[2]) + np.double(a[3]) / spd
+                    if (stp == 0.0) & (mep2 != 0.0):
+                        stp = mep - mep2
+                    mep2 = mep
+                    if (mep >= (mjd1 - 0.5 / 24.0) - 2.0 * stp) & (
+                        mep <= (mjd2 + 0.5 / 24.0) + 3.0 * stp
+                    ):
+                        cpfEP.append(mep)
+                        cpfX.append(np.double(a[5]))
+                        cpfY.append(np.double(a[6]))
+                        cpfZ.append(np.double(a[7]))
 
             try:
                 cpf0 = cpfEP[0]
@@ -498,9 +508,10 @@ def process_one(
                     f"Probably using an out-of-range CPF file for pass {pass_number}"
                 )
             if np.size(cpfEP) == 0:
-                print(
-                    f"\n -- Selected CPF file {cpf_file}does not cover the required orbit time period. Quit"
-                )
+                if verbose:
+                    print(
+                        f"\n -- Selected CPF file {cpf_file}does not cover the required orbit time period. Quit"
+                    )
                 sys.exit()
 
             kd = 16
@@ -520,7 +531,8 @@ def process_one(
                 cpf_ply_Y = np.polyfit(cpfEP - cpf0, cpfY, kd)
                 cpf_ply_Z = np.polyfit(cpfEP - cpf0, cpfZ, kd)
 
-        print("\n -- Begin orbit adjustment to fit range data")
+        if verbose:
+            print("\n -- Begin orbit adjustment to fit range data")
         neps = len(Depc)
         nmet = len(Mmep)
 
@@ -784,9 +796,10 @@ def process_one(
                 Ssel = Rsel
 
             if itr == 1:
-                print(
-                    "\n\t  #      pts         rms2          rms3          rmsa        TBias      Radial"
-                )
+                if verbose:
+                    print(
+                        "\n\t  #      pts         rms2          rms3          rmsa        TBias      Radial"
+                    )
 
             rej3 = 3.0 * rms3
             rej2 = 2.0 * rms3
@@ -829,7 +842,8 @@ def process_one(
                 # Carry out least squares solution
                 ierr, rd = dchols(rd, nu)  #  invert normal matrix
                 if ierr != 0:
-                    print("FAILED to invert normal matrix - quit", ierr)
+                    if verbose:
+                        print("FAILED to invert normal matrix - quit", ierr)
                     sys.exit()
 
                 for i in range(nu):
@@ -896,53 +910,55 @@ def process_one(
                     acrddc = acrddc + acrdd
                     radddc = radddc + rdldd
 
-            print(
-                f"\t{itr:3d} {np.size(Ssel):8d}   {1e9 * rmsb * sw:11.3f}   {1e9 * rms3 * sw:11.3f}   {1000.0 * rmsa * sw:11.3f}    {alnc * 8.64e7:9.4f}  {radc * 1.0e6:9.4f}"
-            )
+            if verbose:
+                print(
+                    f"\t{itr:3d} {np.size(Ssel):8d}   {1e9 * rmsb * sw:11.3f}   {1e9 * rms3 * sw:11.3f}   {1000.0 * rmsa * sw:11.3f}    {alnc * 8.64e7:9.4f}  {radc * 1.0e6:9.4f}"
+                )
 
             if (abs(oldrms - rmsa) * sw < 0.00001) & (itr >= 10):
                 if not itr_fin:
                     itrm = itr + 2
                     itr_fin = True
 
-        print(
-            f"\n\tSatellite orbital time bias (ms)    {alnc * 8.64e7:10.4f} \t{saln:8.4f}"
-        )
-        print(
-            f"\tSatellite radial error (m)          {radc * 1.0e6:10.4f} \t{srdl:8.4f}"
-        )
-        print(
-            f"\tRate of time bias (ms/minute)       {alndc * 8.64e7:10.4f} \t{salnd:8.4f}"
-        )
-        print(
-            f"\tRate of radial error (m/minute)     {raddc * 1.0e6:10.4f} \t{srdld:8.4f}"
-        )
-        print(
-            f"\tAcceleration of time bias           {alnddc * 8.64e7:10.4f} \t{salndd:8.4f}"
-        )
-        print(
-            f"\tAcceleration of radial error        {radddc * 1.0e6:10.4f} \t{srdldd:8.4f}"
-        )
+        if verbose:
+            print(
+                f"\n\tSatellite orbital time bias (ms)    {alnc * 8.64e7:10.4f} \t{saln:8.4f}"
+            )
+            print(
+                f"\tSatellite radial error (m)          {radc * 1.0e6:10.4f} \t{srdl:8.4f}"
+            )
+            print(
+                f"\tRate of time bias (ms/minute)       {alndc * 8.64e7:10.4f} \t{salnd:8.4f}"
+            )
+            print(
+                f"\tRate of radial error (m/minute)     {raddc * 1.0e6:10.4f} \t{srdld:8.4f}"
+            )
+            print(
+                f"\tAcceleration of time bias           {alnddc * 8.64e7:10.4f} \t{salndd:8.4f}"
+            )
+            print(
+                f"\tAcceleration of radial error        {radddc * 1.0e6:10.4f} \t{srdldd:8.4f}"
+            )
 
-        if abs(alnc * 8.64e7) > 100.0:
-            print(
-                "\n -- Large Time Bias required "
-                + "{:9.3f}".format(alnc * 8.64e7)
-                + " ms"
-            )
-        elif abs(alnc * 8.64e7) > 10.0:
-            print("\n -- Time Bias required " + "{:9.3f}".format(alnc * 8.64e7) + " ms")
+            if abs(alnc * 8.64e7) > 100.0:
+                print(
+                    "\n -- Large Time Bias required "
+                    + "{:9.3f}".format(alnc * 8.64e7)
+                    + " ms"
+                )
+            elif abs(alnc * 8.64e7) > 10.0:
+                print("\n -- Time Bias required " + "{:9.3f}".format(alnc * 8.64e7) + " ms")
 
-        if abs(radc * 1.0e6) > 100.0:
-            print(
-                "\n -- Large Radial Offset required "
-                + "{:9.3f}".format(radc * 1.0e6)
-                + " m"
-            )
-        elif abs(radc * 1.0e6) > 10.0:
-            print(
-                "\n -- Radial Offset required " + "{:9.3f}".format(radc * 1.0e6) + " m"
-            )
+            if abs(radc * 1.0e6) > 100.0:
+                print(
+                    "\n -- Large Radial Offset required "
+                    + "{:9.3f}".format(radc * 1.0e6)
+                    + " m"
+                )
+            elif abs(radc * 1.0e6) > 10.0:
+                print(
+                    "\n -- Radial Offset required " + "{:9.3f}".format(radc * 1.0e6) + " m"
+                )
 
         # write range residuals to a file
         with open(save_path, "w") as filerr:
